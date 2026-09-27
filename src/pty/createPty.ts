@@ -16,6 +16,7 @@ export interface PtyOptions {
   rows: number;
   env: Record<string, string>;
   term: string;
+  sessionId?: string;
 }
 
 const EXECUTABLE_PERMISSION_MASK = 0o111;
@@ -85,17 +86,24 @@ const PROMPT_EOL_MARK_ENV_KEY = 'PROMPT_EOL_MARK';
  * Resolves the environment handed to the spawned PTY shell.
  *
  * Precedence, lowest to highest: the inherited process environment (minus
- * host-only internals), then the `PROMPT_EOL_MARK=''` default, then the caller-supplied `env` (so a `--env`
- * value always wins — even an explicit empty one), then `TERM`. The default sits
- * after the inherited environment so it also overrides any inherited
- * `PROMPT_EOL_MARK`, keeping captures deterministic regardless of the launching
- * shell. The presence check is against `env` (the user-explicit set) rather than
- * the merged result, so an inherited value never counts as opting out.
+ * host-only internals), then the `PROMPT_EOL_MARK=''` default, then the
+ * generated session metadata, then the caller-supplied `env` (so a `--env`
+ * value always wins — even an explicit empty one), then `TERM`. The session
+ * metadata is `AGENT_TTY_ACTIVE=true` plus `AGENT_TTY_SESSION_ID` when
+ * `sessionId` is given; without a `sessionId` both are removed instead, so a
+ * session-less PTY never claims an inherited outer session. The defaults sit
+ * after the inherited environment so they also override inherited values: a
+ * nested session reports its own id rather than the outer session's, and
+ * captures stay deterministic regardless of the launching shell. The
+ * `PROMPT_EOL_MARK` presence check is against `env` (the user-explicit set)
+ * rather than the merged result, so an inherited value never counts as opting
+ * out.
  */
 export function resolvePtyEnv(
   env: Record<string, string>,
   term: string,
   baseEnv: Record<string, string | undefined> = process.env,
+  sessionId?: string,
 ): Record<string, string> {
   const resolved: Record<string, string> = {};
   for (const [key, value] of Object.entries(baseEnv)) {
@@ -109,6 +117,20 @@ export function resolvePtyEnv(
 
   if (!Object.prototype.hasOwnProperty.call(env, PROMPT_EOL_MARK_ENV_KEY)) {
     resolved[PROMPT_EOL_MARK_ENV_KEY] = '';
+  }
+
+  invariant(
+    sessionId === undefined || sessionId.length > 0,
+    'resolvePtyEnv: sessionId must be non-empty when provided',
+  );
+  if (sessionId === undefined) {
+    // A PTY without a session (the doctor spawn probe) must not claim one, so
+    // drop any session variables inherited from an outer session.
+    delete resolved.AGENT_TTY_ACTIVE;
+    delete resolved.AGENT_TTY_SESSION_ID;
+  } else {
+    resolved.AGENT_TTY_ACTIVE = 'true';
+    resolved.AGENT_TTY_SESSION_ID = sessionId;
   }
 
   Object.assign(resolved, env);
@@ -144,6 +166,6 @@ export function createPty(options: PtyOptions): IPty {
     cwd,
     cols,
     rows,
-    env: resolvePtyEnv(env, term),
+    env: resolvePtyEnv(env, term, process.env, options.sessionId),
   });
 }

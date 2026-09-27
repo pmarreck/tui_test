@@ -64,4 +64,94 @@ describe('resolvePtyEnv', () => {
     expect(resolved.BAZ).toBe('qux');
     expect(Object.prototype.hasOwnProperty.call(resolved, 'EMPTY')).toBe(false);
   });
+
+  it('sets AGENT_TTY_ACTIVE and AGENT_TTY_SESSION_ID when sessionId is provided', () => {
+    const resolved = resolvePtyEnv(
+      {},
+      'xterm-256color',
+      {},
+      'test-session-123',
+    );
+    expect(resolved.AGENT_TTY_ACTIVE).toBe('true');
+    expect(resolved.AGENT_TTY_SESSION_ID).toBe('test-session-123');
+  });
+
+  it('sets no session variables when sessionId is not provided', () => {
+    const resolved = resolvePtyEnv({}, 'xterm-256color', {});
+    expect(
+      Object.prototype.hasOwnProperty.call(resolved, 'AGENT_TTY_ACTIVE'),
+    ).toBe(false);
+    expect(
+      Object.prototype.hasOwnProperty.call(resolved, 'AGENT_TTY_SESSION_ID'),
+    ).toBe(false);
+  });
+
+  it('strips inherited outer session variables when sessionId is not provided', () => {
+    const resolved = resolvePtyEnv({}, 'xterm-256color', {
+      AGENT_TTY_ACTIVE: 'true',
+      AGENT_TTY_SESSION_ID: 'outer-session',
+      OTHER: 'kept',
+    });
+
+    expect(
+      Object.prototype.hasOwnProperty.call(resolved, 'AGENT_TTY_ACTIVE'),
+    ).toBe(false);
+    expect(
+      Object.prototype.hasOwnProperty.call(resolved, 'AGENT_TTY_SESSION_ID'),
+    ).toBe(false);
+    expect(resolved.OTHER).toBe('kept');
+  });
+
+  it('lets caller-supplied env set session variables when sessionId is not provided', () => {
+    const resolved = resolvePtyEnv(
+      { AGENT_TTY_ACTIVE: 'custom', AGENT_TTY_SESSION_ID: 'custom-id' },
+      'xterm-256color',
+      { AGENT_TTY_ACTIVE: 'true', AGENT_TTY_SESSION_ID: 'outer-session' },
+    );
+
+    expect(resolved.AGENT_TTY_ACTIVE).toBe('custom');
+    expect(resolved.AGENT_TTY_SESSION_ID).toBe('custom-id');
+  });
+
+  it('rejects an empty sessionId', () => {
+    expect(() => resolvePtyEnv({}, 'xterm-256color', {}, '')).toThrow(
+      /sessionId must be non-empty/,
+    );
+  });
+
+  it('replaces an inherited outer session id with the session id', () => {
+    const resolved = resolvePtyEnv(
+      {},
+      'xterm-256color',
+      { AGENT_TTY_ACTIVE: 'outer', AGENT_TTY_SESSION_ID: 'outer-session' },
+      'inner-session',
+    );
+
+    expect(resolved.AGENT_TTY_ACTIVE).toBe('true');
+    expect(resolved.AGENT_TTY_SESSION_ID).toBe('inner-session');
+  });
+
+  it('lets caller-supplied env override the injected session variables', () => {
+    const resolved = resolvePtyEnv(
+      { AGENT_TTY_ACTIVE: 'custom', AGENT_TTY_SESSION_ID: 'custom-id' },
+      'xterm-256color',
+      { AGENT_TTY_SESSION_ID: 'outer-session' },
+      'inner-session',
+    );
+
+    expect(resolved.AGENT_TTY_ACTIVE).toBe('custom');
+    expect(resolved.AGENT_TTY_SESSION_ID).toBe('custom-id');
+  });
+
+  it('lets an explicit empty caller value override the injected session variables', () => {
+    const resolved = resolvePtyEnv(
+      { AGENT_TTY_ACTIVE: '', AGENT_TTY_SESSION_ID: '' },
+      'xterm-256color',
+      {},
+      'inner-session',
+    );
+
+    expect(resolved.AGENT_TTY_ACTIVE).toBe('');
+    expect(resolved.AGENT_TTY_SESSION_ID).toBe('');
+  });
 });

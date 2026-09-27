@@ -69,6 +69,7 @@ function buildWaitParams(
   return {
     ...(condition.text === undefined ? {} : { text: condition.text }),
     ...(condition.regex === undefined ? {} : { regex: condition.regex }),
+    ...(condition.scope === undefined ? {} : { scope: condition.scope }),
     ...(condition.screenStableMs === undefined
       ? {}
       : { screenStableMs: condition.screenStableMs }),

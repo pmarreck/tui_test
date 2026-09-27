@@ -65,6 +65,7 @@ const WaitStepSchema = z
       .object({
         text: z.string().optional(),
         regex: z.string().optional(),
+        scope: z.enum(['screen', 'cursor-line']).optional(),
         screenStableMs: z.number().int().positive().optional(),
         cursorRow: z.number().int().nonnegative().optional(),
         cursorCol: z.number().int().nonnegative().optional(),
@@ -212,6 +213,7 @@ function parseWaitStep(
   const condition = prepareRenderWaitCondition({
     text: wait.text,
     regex: wait.regex,
+    scope: wait.scope,
     screenStableMs: wait.screenStableMs,
     cursorRow: wait.cursorRow,
     cursorCol: wait.cursorCol,
